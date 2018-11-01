@@ -7,20 +7,19 @@ extern "C" {
 #endif
 
     typedef enum {
-        None = 0,
-        LdpcTc128 = 1,
-        LdpcTc256 = 2,
-        LdpcTc512 = 3,
-    } fec_type_t;
+        CAUT_TYPE_NONE = 0,
+        CAUT_TYPE_STANDARD = 1,
+        CAUT_TYPE_CUSTOM = 2,
+    } caut_type_t;
 
     int helium_init(void);
     
     int helium_driver_check(void);
 
-    int helium_set_address(const char *address);
+    int helium_set_address(unsigned char *address);
 
     int helium_send(unsigned short addr,
-            fec_type_t type,
+            caut_type_t type,
             const char *payload,
             unsigned char len);
 

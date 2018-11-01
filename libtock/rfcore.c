@@ -1,14 +1,16 @@
 #include "rfcore.h"
 #include "tock.h"
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include "console.h"
 
-#define HELIUM_DRIVER           (0xCC1312)
-#define ALLOW_NUM_W             (0)
-#define ALLOW_NUM_R             (1)
+#define HELIUM_DRIVER           (0xCC1352)
+#define ALLOW_NUM_W             (1)
+#define ALLOW_NUM_R             (0)
 #define ALLOW_NUM_C             (2)
-#define SUBSCRIBE_TX            (0)
-#define SUBSCRIBE_RX            (1)
-#define DRIVER_SIMPLE_RFCORE    (0x000CC1312)
+#define SUBSCRIBE_TX            (1)
+#define SUBSCRIBE_RX            (0)
 
 enum cmd {
     COMMAND_DRIVER_CHECK = 0,
@@ -32,14 +34,12 @@ unsigned char BUF_CFG[27];
 
 // Internal callback for transmission
 static int tx_result;
-static int tx_acked;
 
 static void tx_done_callback(int result,
-                             int acked,
+                             __attribute__ ((unused)) int arg2,
                              __attribute__ ((unused)) int arg3,
                              void* ud) {
   tx_result     = result;
-  tx_acked      = acked;
   *((bool*) ud) = true;
 }
 
@@ -60,15 +60,15 @@ int helium_init(void) {
     return command(HELIUM_DRIVER, COMMAND_INITIALIZE, 0, 0);
 }
 
-int helium_set_address(const char *address) {
+int helium_set_address(unsigned char *address) {
     if (!address) return TOCK_EINVAL;
-    int err = allow(HELIUM_DRIVER, ALLOW_NUM_C, (void *) address, 0);
+    int err = allow(HELIUM_DRIVER, ALLOW_NUM_C, (void *) address, 10);
     if (err<0) return err;
     return command(HELIUM_DRIVER, COMMAND_SET_ADDRESS, 0, 0);
 }
 
 int helium_send(unsigned short addr,
-        fec_type_t ftype,
+        caut_type_t ftype,
         const char *payload,
         unsigned char len) {
   // Setup parameters in ALLOW_CFG and ALLOW_TX
@@ -90,9 +90,8 @@ int helium_send(unsigned short addr,
   yield_for(&tx_done);
   if (tx_result != TOCK_SUCCESS) {
     return tx_result;
-  } else if (tx_acked == 0) {
-    return TOCK_ENOACK;
-  } else {
+  } 
+  else {
     return TOCK_SUCCESS;
   }
 

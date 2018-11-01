@@ -7,36 +7,62 @@
 #include <timer.h>
 #include <rfcore.h>
 
+#define PKT_SIZE 128 
 int num_leds;
+#define TEAM_NAME "something";
 
-static void nop(
-  int a __attribute__((unused)),
-  int b __attribute__((unused)),
-  int c __attribute__((unused)),
-  void* d __attribute__((unused))) {}
+unsigned char address[10] = "something";
 
 int main(void) {
-    // Ask the kernel how many LEDs are on this board.
-    num_leds = led_count();
-
     // Set some basic device parameters for the client
-    
-    if (helium_driver_check() != 0) {
-        char err[] = "Driver check failure\r\n";
-        putnstr_async(err, sizeof(err), nop, NULL);
+    if (!helium_driver_check()) {
+        printf("Driver check OK\r\n");
+    } else {
+        printf("Driver check FAIL\r\n");
     } 
-
-    // Blink the LEDs in a binary count pattern and scale
-    // to the number of LEDs on the board.
-    for (int count = 0; ; count++) {
-        for (int i = 0; i < num_leds; i++) {
-            if (count & (1 << i)) {
-                led_on(i);
-            } else {
-                led_off(i);
-            }
-        }
-        // This delay uses an underlying timer in the kernel.
-        delay_ms(250);
+  
+    if (!helium_set_address(address)) {
+        printf("Set address OK\r\n");
+    } else {
+        printf("Set address FAIL\r\n");
     }
+    
+    int a;
+    int b;
+    int c;
+
+    char message[157]; 
+    sprintf(message, "{\"team\":\"%s\",\"payload\":{\"temp\":%d,\"xyz\":%d,\"lux\":%d}}", address,a,b,c);
+    
+    /*    
+    led_toggle(1);
+    int res = helium_send(0x0000, CAUT_TYPE_NONE, message, sizeof(message));
+    if (res != TOCK_SUCCESS) {
+        printf("\r\nSend Fail\r\n");
+        led_toggle(0);
+        delay_ms(500);
+        led_toggle(1);
+        led_toggle(0);
+    } else {
+        printf("\r\nSend SUCCESS\r\n");
+        led_toggle(1);
+        delay_ms(500);
+    }
+    */
+    while(1) {
+        led_toggle(1);
+        int res = helium_send(0x0000, CAUT_TYPE_NONE, message, sizeof(message));
+        if (res != TOCK_SUCCESS) {
+            printf("\r\nSend Fail\r\n");
+            led_toggle(0);
+            delay_ms(500);
+            led_toggle(1);
+            led_toggle(0);
+        } else {
+            printf("\r\nSend SUCCESS\r\n");
+            led_toggle(1);
+            delay_ms(500);
+        }
+    }
+    return 0;
 }
