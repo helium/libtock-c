@@ -10,11 +10,11 @@
 #include "bmm150/bmm150_port.h"
 #include "opt3001/opt3001.h"
 
+#include <button.h>
 #include <console.h>
 #include <i2c_master.h>
+#include <led.h>
 #include <timer.h>
-
-
 
 char hello[] = "TI Sensor BoosterPack\r\n";
 
@@ -37,6 +37,28 @@ struct bmm150_dev bmm150;
 struct opt3001_dev opt3001;
 int8_t opt3001_get_lux(struct opt3001_dev *dev);
 
+bool new_event = true;
+
+// Button Press callback
+static void button_callback(int btn_num,
+                            int val,
+                            __attribute__ ((unused)) int arg2,
+                            __attribute__ ((unused)) void *ud) {
+  
+  if (val == 1) {
+      led_on(btn_num);
+      new_event = true;
+  }
+}
+
+// Timer callback
+tock_timer_t sensor_sample_timer;
+static void timer_callback( __attribute__ ((unused)) int arg0,
+                            __attribute__ ((unused)) int arg1,
+                            __attribute__ ((unused)) int arg2,
+                            __attribute__ ((unused)) void *ud) {
+  new_event =true;
+}
 
 
 int main(void) {
@@ -45,10 +67,18 @@ int main(void) {
 
   putnstr(hello, sizeof(hello));
 
+  button_subscribe(button_callback, NULL);
+
+  // Enable interrupts on each button.
+  int count = button_count();
+  for (int i = 0; i < count; i++) {
+    button_enable_interrupt(i);
+  }
+
   rslt = bme280_port_init(&bme280);
   if (rslt != BME280_OK) {
     putnstr("BME280 Initialization Failed\r\n", 29);
-    while (1) ;
+    while (1);
   }else {
     putnstr("BME280 Initialized\r\n", 20);
   }
@@ -57,7 +87,7 @@ int main(void) {
   rslt = bmi160_port_init(&bmi160);
   if (rslt != BMI160_OK) {
     putnstr("BMI160 Initialization Failed\r\n", 29);
-    while (1) ;
+    while (1);
   }else {
     putnstr("BMI160 Initialized\r\n", 20);
   }
@@ -66,7 +96,7 @@ int main(void) {
   rslt = bmm150_port_init(&bmm150);
   if (rslt != BMM150_OK) {
     putnstr("BMM150 Initialization Failed\r\n", 29);
-    while (1) ;
+    while (1);
   }else {
     putnstr("BMM150 Initialized\r\n", 20);
   }
@@ -75,18 +105,26 @@ int main(void) {
   // optionally pass custom parameters instead of NULL
   if (!OPT3001_init(&opt3001, NULL)) {
     putnstr("OPT3001 Initialization Failed\r\n", 29);
-    while (1) ;
+    while (1);
   }else {
     putnstr("OPT3001 Initialized\r\n", 20);
   }
 
-  while (1) {
+  timer_every(60000, timer_callback, NULL, &sensor_sample_timer);
+
+  while(1){
+    yield_for(&new_event);
+
     bme280_get_sample_forced_mode(&bme280);
     bmi160_get_all_with_time(&bmi160);
     bmm150_get_data(&bmm150);
     opt3001_get_lux(&opt3001);
-    delay_ms(200);
+    new_event = false;
+    led_off(0);
+    led_off(1);
+
   }
+
   return 0;
 }
 
