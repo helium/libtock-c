@@ -7,10 +7,10 @@
 
 #define HELIUM_DRIVER           (0xCC1352)
 #define ALLOW_NUM_W             (1)
-#define ALLOW_NUM_R             (0)
+// #define ALLOW_NUM_R             (0)
 #define ALLOW_NUM_C             (2)
 #define SUBSCRIBE_TX            (1)
-#define SUBSCRIBE_RX            (0)
+// #define SUBSCRIBE_RX            (0)
 
 enum cmd {
     COMMAND_DRIVER_CHECK = 0,
@@ -42,7 +42,7 @@ static void tx_done_callback(int result,
   tx_result     = result;
   *((bool*) ud) = true;
 }
-
+/*
 // Internal callback for receive
 static void rx_done_callback(__attribute__ ((unused)) int pans,
                              __attribute__ ((unused)) int dst_addr,
@@ -51,7 +51,7 @@ static void rx_done_callback(__attribute__ ((unused)) int pans,
   *((bool*) ud) = true;
 }
 
-
+*/
 int helium_driver_check(void) {
     return command(HELIUM_DRIVER, COMMAND_DRIVER_CHECK, 0, 0);
 }
