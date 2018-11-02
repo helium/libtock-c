@@ -18,8 +18,8 @@ C_SRCS += bmm150.c bmm150_port.c
 VPATH_DIRS += ./opt3001/
 C_SRCS += opt3001.c
 
-# Which files to compile.
-C_SRCS := $(wildcard *.c)
+C_SRCS += $(wildcard *.c)
+
 
 # Include userland master makefile. Contains rules and flags for actually
 # building the application.
