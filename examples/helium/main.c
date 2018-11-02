@@ -14,15 +14,16 @@
 #include <console.h>
 #include <i2c_master.h>
 #include <led.h>
-#include <timer.h>
-#include <rfcore.h>
 #include <led.h>
+#include <rfcore.h>
+#include <timer.h>
 
 int8_t bme280_setup(struct bme280_dev *dev);
 int8_t bme280_get_sample_forced_mode(struct bme280_dev *dev, struct bme280_data *data);
 
 int8_t bmi160_setup(struct bmi160_dev *sensor);
-int8_t bmi160_get_all_with_time(struct bmi160_dev *sensor, struct bmi160_sensor_data *accel, struct bmi160_sensor_data *gyro);
+int8_t bmi160_get_all_with_time(struct bmi160_dev *sensor, struct bmi160_sensor_data *accel,
+                                struct bmi160_sensor_data *gyro);
 
 /* wrapper functions s.t. you can talk to bmm150 via bmi160 */
 int8_t user_aux_read(uint8_t id, uint8_t reg_addr, uint8_t *aux_data, uint16_t len);
@@ -49,10 +50,10 @@ static void button_callback(int btn_num,
                             int val,
                             __attribute__ ((unused)) int arg2,
                             __attribute__ ((unused)) void *ud) {
-    if (val == 1) {
-        led_on(btn_num);
-        new_event = true;
-    }
+  if (val == 1) {
+    led_on(btn_num);
+    new_event = true;
+  }
 }
 
 // Timer callback
@@ -62,95 +63,96 @@ static void timer_callback( __attribute__ ((unused)) int arg0,
                             __attribute__ ((unused)) int arg1,
                             __attribute__ ((unused)) int arg2,
                             __attribute__ ((unused)) void *ud) {
-    new_event =true;
+  new_event = true;
 }
 
 int main(void) {
 
-    int8_t rslt;
+  int8_t rslt;
 
-    printf("TI Sensor BoosterPack with Helium");
+  printf("TI Sensor BoosterPack with Helium");
 
-    button_subscribe(button_callback, NULL);
+  button_subscribe(button_callback, NULL);
 
-    // Enable interrupts on each button.
-    int count = button_count();
-    for (int i = 0; i < count; i++) {
-        button_enable_interrupt(i);
-    }
+  // Enable interrupts on each button.
+  int count = button_count();
+  for (int i = 0; i < count; i++) {
+    button_enable_interrupt(i);
+  }
 
-    rslt = bme280_port_init(&bme280);
-    if (rslt != BME280_OK) {
-        printf("BME280 Initialization Failed\r\n");
-        while (1);
-    }else {
-        printf("BME280 Initialized\r\n");
-    }
-    bme280_setup(&bme280);
+  rslt = bme280_port_init(&bme280);
+  if (rslt != BME280_OK) {
+    printf("BME280 Initialization Failed\r\n");
+    while (1) ;
+  }else {
+    printf("BME280 Initialized\r\n");
+  }
+  bme280_setup(&bme280);
 
-    rslt = bmi160_port_init(&bmi160);
-    if (rslt != BMI160_OK) {
-        printf("BMI160 Initialization Failed\r\n");
-        while (1);
-    }else {
-        printf("BMI160 Initialized\r\n");
-    }
-    bmi160_setup(&bmi160);
+  rslt = bmi160_port_init(&bmi160);
+  if (rslt != BMI160_OK) {
+    printf("BMI160 Initialization Failed\r\n");
+    while (1) ;
+  }else {
+    printf("BMI160 Initialized\r\n");
+  }
+  bmi160_setup(&bmi160);
 
-    rslt = bmm150_port_init(&bmm150);
-    if (rslt != BMM150_OK) {
-        printf("BMM150 Initialization Failed\r\n");
-        while (1);
-    }else {
-        printf("BMM150 Initialized\r\n");
-    }
-    bmm150_setup(&bmm150);
+  rslt = bmm150_port_init(&bmm150);
+  if (rslt != BMM150_OK) {
+    printf("BMM150 Initialization Failed\r\n");
+    while (1) ;
+  }else {
+    printf("BMM150 Initialized\r\n");
+  }
+  bmm150_setup(&bmm150);
 
-    // optionally pass custom parameters instead of NULL
-    if (!OPT3001_init(&opt3001, NULL)) {
-        printf("OPT3001 Initialization Failed\r\n");
-        while (1);
-    }else {
-        printf("OPT3001 Initialized\r\n");
-    }
+  // optionally pass custom parameters instead of NULL
+  if (!OPT3001_init(&opt3001, NULL)) {
+    printf("OPT3001 Initialization Failed\r\n");
+    while (1) ;
+  }else {
+    printf("OPT3001 Initialized\r\n");
+  }
 
-    if (!helium_driver_check()) {
-        printf("Driver check OK\r\n");
+  if (!helium_driver_check()) {
+    printf("Driver check OK\r\n");
+  } else {
+    printf("Driver check FAIL\r\n");
+  }
+
+  if (!helium_set_address(address)) {
+    printf("Set address OK\r\n");
+  } else {
+    printf("Set address FAIL\r\n");
+  }
+
+  timer_every(1000, timer_callback, NULL, &sensor_sample_timer);
+
+  while (1) {
+    yield_for(&new_event);
+    bme280_get_sample_forced_mode(&bme280, &bme_data);
+    bmi160_get_all_with_time(&bmi160, &bmi_accel, &bmi_gyro);
+    bmm150_get_data(&bmm150);
+    bool lux = opt3001_get_lux(&opt3001);
+
+    snprintf(message, 157,
+             "{\"team\":\"%9s\",\"payload\":{\"bme\":%ld,\"bmi\":{\"x\":%d,\"y\":%d,\"z\":%d},\"lux\":%d,\"bmm\":{\"x\":%d,\"y\":%d,\"z\":%d}}}\r\n0",
+             address, bme_data.temperature, bmi_gyro.x,bmi_gyro.y,bmi_gyro.z,lux,bmm150.data.x,bmm150.data.y,
+             bmm150.data.z);
+    printf("Message [%s]", message);
+
+    int res = helium_send(0x0000, CAUT_TYPE_NONE, message, sizeof(message));
+    if (res != TOCK_SUCCESS) {
+      printf("\r\nSend Fail\r\n");
     } else {
-        printf("Driver check FAIL\r\n");
+      printf("\r\nSend SUCCESS\r\n");
     }
 
-    if (!helium_set_address(address)) {
-        printf("Set address OK\r\n");
-    } else {
-        printf("Set address FAIL\r\n");
-    }
-
-    timer_every(1000, timer_callback, NULL, &sensor_sample_timer);
-
-    while(1){
-        yield_for(&new_event);
-        bme280_get_sample_forced_mode(&bme280, &bme_data);
-        bmi160_get_all_with_time(&bmi160, &bmi_accel, &bmi_gyro);
-        bmm150_get_data(&bmm150);
-        bool lux = opt3001_get_lux(&opt3001);
-
-        snprintf(message, 157, "{\"team\":\"%9s\",\"payload\":{\"bme\":%ld,\"bmi\":{\"x\":%d,\"y\":%d,\"z\":%d},\"lux\":%d,\"bmm\":{\"x\":%d,\"y\":%d,\"z\":%d}}}\r\n0", 
-            address, bme_data.temperature, bmi_gyro.x,bmi_gyro.y,bmi_gyro.z,lux,bmm150.data.x,bmm150.data.y,bmm150.data.z);
-        printf("Message [%s]", message);
-    
-        int res = helium_send(0x0000, CAUT_TYPE_NONE, message, sizeof(message));
-        if (res != TOCK_SUCCESS) {
-            printf("\r\nSend Fail\r\n");
-        } else {
-            printf("\r\nSend SUCCESS\r\n");
-        }
- 
-        new_event = false;
-        led_off(0);
-        led_off(1);
-    }
-
+    new_event = false;
+    led_off(0);
+    led_off(1);
+  }
 
   return 0;
 }
@@ -172,7 +174,7 @@ int8_t bme280_setup(struct bme280_dev *dev)
 
 int8_t bme280_get_sample_forced_mode(struct bme280_dev *dev, struct bme280_data *comp_data)
 {
-  //struct bme280_data comp_data;
+  // struct bme280_data comp_data;
   uint8_t rslt = bme280_set_sensor_mode(BME280_FORCED_MODE, dev);
 
   if (rslt != BME280_OK) {
@@ -238,7 +240,8 @@ int8_t bmi160_setup(struct bmi160_dev *sensor){
   return bmi160_set_sens_conf(sensor);
 }
 
-int8_t bmi160_get_all_with_time(struct bmi160_dev *sensor, struct bmi160_sensor_data *accel, struct bmi160_sensor_data *gyro){
+int8_t bmi160_get_all_with_time(struct bmi160_dev *sensor, struct bmi160_sensor_data *accel,
+                                struct bmi160_sensor_data *gyro){
   int8_t rslt;
   // struct bmi160_sensor_data accel;
   // struct bmi160_sensor_data gyro;
