@@ -135,24 +135,10 @@ int main(void) {
         bmm150_get_data(&bmm150);
         bool lux = opt3001_get_lux(&opt3001);
 
-        
         snprintf(message, 157, "{\"team\":\"%9s\",\"payload\":{\"bme\":%ld,\"bmi\":{\"x\":%d,\"y\":%d,\"z\":%d},\"lux\":%d,\"bmm\":{\"x\":%d,\"y\":%d,\"z\":%d}}}\r\n0", 
             address, bme_data.temperature, bmi_gyro.x,bmi_gyro.y,bmi_gyro.z,lux,bmm150.data.x,bmm150.data.y,bmm150.data.z);
         printf("Message [%s]", message);
     
-        // Set some basic device parameters for the client
-        if (!helium_driver_check()) {
-            printf("Driver check OK\r\n");
-        } else {
-            printf("Driver check FAIL\r\n");
-        }
-
-        if (!helium_set_address(address)) {
-            printf("Set address OK\r\n");
-        } else {
-            printf("Set address FAIL\r\n");
-        }
-
         int res = helium_send(0x0000, CAUT_TYPE_NONE, message, sizeof(message));
         if (res != TOCK_SUCCESS) {
             printf("\r\nSend Fail\r\n");
