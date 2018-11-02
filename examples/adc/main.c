@@ -26,11 +26,10 @@ int main(void) {
   while(true) {
       uint16_t temp;
       adc_sample_sync(2, &temp);
-      res = 1098 * temp;
-      char output0[] = "[ADC] volt            ";
-      itoa (res, &output0[11], 10);
-      putnstr(output0, sizeof(output0));
-      putnstr("\r\n", 2);
+      printf("Raw: %u\r\n", temp);
+      res =  (((temp * 4300) + 2047) / 4095);
+
+      printf("Volt: %lu\r\n", res);
 
       delay_ms(1000);
     
