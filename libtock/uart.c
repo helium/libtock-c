@@ -21,19 +21,20 @@ struct putstr_queue {
 volatile struct putstr_queue putstr_queues[MAX_UARTS];
 
 static void uart_putstr_cb(int _x __attribute__ ((unused)),
-                      int uart_num,
-                      int _z __attribute__ ((unused)),
-                      void* ud __attribute__ ((unused))) {
+                           int uart_num,
+                           int _z __attribute__ ((unused)),
+                           void* ud __attribute__ ((unused))) {
 
   putstr_data_t* data = putstr_queues[uart_num].putstr_head;
   data->called = true;
-  putstr_queues[uart_num].putstr_head  = data->next;
+  putstr_queues[uart_num].putstr_head = data->next;
 
   if (putstr_queues[uart_num].putstr_head == NULL) {
     putstr_queues[uart_num].putstr_tail = NULL;
   } else {
     int ret;
-    ret = uart_putnstr_async(uart_num, putstr_queues[uart_num].putstr_head->buf, putstr_queues[uart_num].putstr_head->len, uart_putstr_cb, NULL);
+    ret = uart_putnstr_async(uart_num, putstr_queues[uart_num].putstr_head->buf,
+                             putstr_queues[uart_num].putstr_head->len, uart_putstr_cb, NULL);
     if (ret < 0) {
       // XXX There's no path to report errors currently, so just drop it
       uart_putstr_cb(0, uart_num, 0, NULL);
@@ -88,26 +89,26 @@ int uart_putnstr_async(uint8_t uart_num, const char *str, size_t len, subscribe_
   void* buf = (void*) str;
 #pragma GCC diagnostic pop
 
-  ret = allow(DRIVER_NUM_CONSOLE, 1 | (uart_num<<16), buf, len);
+  ret = allow(DRIVER_NUM_CONSOLE, 1 | (uart_num << 16), buf, len);
   if (ret < 0) return ret;
 
-  ret = subscribe(DRIVER_NUM_CONSOLE, 1 | (uart_num<<16), cb, userdata);
+  ret = subscribe(DRIVER_NUM_CONSOLE, 1 | (uart_num << 16), cb, userdata);
   if (ret < 0) return ret;
 
-  ret = command(DRIVER_NUM_CONSOLE, 1 | (uart_num<<16), len, 0);
+  ret = command(DRIVER_NUM_CONSOLE, 1 | (uart_num << 16), len, 0);
   return ret;
 }
 
 int uart_getnstr_async(uint8_t uart_num, char *str, size_t len, subscribe_cb cb, void* userdata) {
   int ret;
 
-  ret = allow(DRIVER_NUM_CONSOLE, 2 | (uart_num<<16), str, len);
+  ret = allow(DRIVER_NUM_CONSOLE, 2 | (uart_num << 16), str, len);
   if (ret < 0) return ret;
 
-  ret = subscribe(DRIVER_NUM_CONSOLE, 2 | (uart_num<<16), cb, userdata);
+  ret = subscribe(DRIVER_NUM_CONSOLE, 2 | (uart_num << 16), cb, userdata);
   if (ret < 0) return ret;
 
-  ret = command(DRIVER_NUM_CONSOLE, 2 | (uart_num<<16), len, 0);
+  ret = command(DRIVER_NUM_CONSOLE, 2 | (uart_num << 16), len, 0);
   return ret;
 }
 
@@ -150,5 +151,5 @@ int uart_getch(uint8_t uart_num) {
 }
 
 int uart_getnstr_abort(uint8_t uart_num) {
-  return command(DRIVER_NUM_CONSOLE | (uart_num>>16), 3, 0, 0);
+  return command(DRIVER_NUM_CONSOLE | (uart_num >> 16), 3, 0, 0);
 }

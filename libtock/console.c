@@ -2,8 +2,8 @@
 #include <string.h>
 #include <unistd.h>
 
-#include <uart.h>
 #include "console.h"
+#include <uart.h>
 
 
 static uint8_t uart_num = 0;
