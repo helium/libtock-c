@@ -11,7 +11,6 @@ typedef struct putstr_data {
   struct putstr_data* next;
 } putstr_data_t;
 
-
 #define MAX_UARTS 2
 
 struct putstr_queue {
@@ -19,12 +18,13 @@ struct putstr_queue {
   putstr_data_t *putstr_tail;
 };
 
-struct putstr_queue putstr_queues[MAX_UARTS];
+volatile struct putstr_queue putstr_queues[MAX_UARTS];
 
-static void putstr_cb(int uart_num,
-                      int _y __attribute__ ((unused)),
+static void uart_putstr_cb(int _x __attribute__ ((unused)),
+                      int uart_num,
                       int _z __attribute__ ((unused)),
                       void* ud __attribute__ ((unused))) {
+
   putstr_data_t* data = putstr_queues[uart_num].putstr_head;
   data->called = true;
   putstr_queues[uart_num].putstr_head  = data->next;
@@ -33,15 +33,15 @@ static void putstr_cb(int uart_num,
     putstr_queues[uart_num].putstr_tail = NULL;
   } else {
     int ret;
-    ret = putnstr_async(uart_num, putstr_queues[uart_num].putstr_head->buf, putstr_queues[uart_num].putstr_head->len, putstr_cb, NULL);
+    ret = uart_putnstr_async(uart_num, putstr_queues[uart_num].putstr_head->buf, putstr_queues[uart_num].putstr_head->len, uart_putstr_cb, NULL);
     if (ret < 0) {
       // XXX There's no path to report errors currently, so just drop it
-      putstr_cb(0, 0, 0, NULL);
+      uart_putstr_cb(0, uart_num, 0, NULL);
     }
   }
 }
 
-int putnstr(uint8_t uart_num, const char *str, size_t len) {
+int uart_putnstr(uint8_t uart_num, const char *str, size_t len) {
   int ret = TOCK_SUCCESS;
 
   putstr_data_t* data = (putstr_data_t*)malloc(sizeof(putstr_data_t));
@@ -59,7 +59,7 @@ int putnstr(uint8_t uart_num, const char *str, size_t len) {
 
   if (putstr_queues[uart_num].putstr_tail == NULL) {
     // Invariant, if tail is NULL, head is also NULL
-    ret = putnstr_async(uart_num, data->buf, data->len, putstr_cb, NULL);
+    ret = uart_putnstr_async(uart_num, data->buf, data->len, uart_putstr_cb, NULL);
     if (ret < 0) goto putnstr_fail_async;
     putstr_queues[uart_num].putstr_head = data;
     putstr_queues[uart_num].putstr_tail = data;
@@ -78,7 +78,7 @@ putnstr_fail_buf_alloc:
   return ret;
 }
 
-int putnstr_async(uint8_t uart_num, const char *str, size_t len, subscribe_cb cb, void* userdata) {
+int uart_putnstr_async(uint8_t uart_num, const char *str, size_t len, subscribe_cb cb, void* userdata) {
   int ret;
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wcast-qual"
@@ -88,26 +88,26 @@ int putnstr_async(uint8_t uart_num, const char *str, size_t len, subscribe_cb cb
   void* buf = (void*) str;
 #pragma GCC diagnostic pop
 
-  ret = allow(DRIVER_NUM_CONSOLE| (uart_num>>16), 1, buf, len);
+  ret = allow(DRIVER_NUM_CONSOLE, 1 | (uart_num<<16), buf, len);
   if (ret < 0) return ret;
 
-  ret = subscribe(DRIVER_NUM_CONSOLE| (uart_num>>16), 1, cb, userdata);
+  ret = subscribe(DRIVER_NUM_CONSOLE, 1 | (uart_num<<16), cb, userdata);
   if (ret < 0) return ret;
 
-  ret = command(DRIVER_NUM_CONSOLE| (uart_num>>16), 1, len, 0);
+  ret = command(DRIVER_NUM_CONSOLE, 1 | (uart_num<<16), len, 0);
   return ret;
 }
 
-int getnstr_async(uint8_t uart_num, char *str, size_t len, subscribe_cb cb, void* userdata) {
+int uart_getnstr_async(uint8_t uart_num, char *str, size_t len, subscribe_cb cb, void* userdata) {
   int ret;
 
-  ret = allow(DRIVER_NUM_CONSOLE| (uart_num>>16), 2, str, len);
+  ret = allow(DRIVER_NUM_CONSOLE, 2 | (uart_num<<16), str, len);
   if (ret < 0) return ret;
 
-  ret = subscribe(DRIVER_NUM_CONSOLE| (uart_num>>16), 2, cb, userdata);
+  ret = subscribe(DRIVER_NUM_CONSOLE, 2 | (uart_num<<16), cb, userdata);
   if (ret < 0) return ret;
 
-  ret = command(DRIVER_NUM_CONSOLE| (uart_num>>16), 2, len, 0);
+  ret = command(DRIVER_NUM_CONSOLE, 2 | (uart_num<<16), len, 0);
   return ret;
 }
 
@@ -116,42 +116,39 @@ typedef struct getnstr_data {
   int result;
 } getnstr_data_t;
 
-struct getnstr_data getnstr_datas[MAX_UARTS];
+struct getnstr_data getnstr_datas[MAX_UARTS] = {{ true, 0 }, { true, 0 }};
 
 static void getnstr_cb(int result,
+                       int _x __attribute__ ((unused)),
                        int uart_num,
-                       int _z __attribute__ ((unused)),
                        void* ud __attribute__ ((unused))) {
   getnstr_datas[uart_num].result = result;
   getnstr_datas[uart_num].called = true;
 }
 
-int getnstr(uint8_t uart_num, char *str, size_t len) {
+int uart_getnstr(uint8_t uart_num, char *str, size_t len) {
   int ret;
-
   if (!getnstr_datas[uart_num].called) {
     // A call is already in progress
     return TOCK_EALREADY;
   }
   getnstr_datas[uart_num].called = false;
 
-  ret = getnstr_async(uart_num, str, len, getnstr_cb, NULL);
+  ret = uart_getnstr_async(uart_num, str, len, getnstr_cb, NULL);
   if (ret < 0) return ret;
-
   yield_for(&getnstr_datas[uart_num].called);
-
   return getnstr_datas[uart_num].result;
 }
 
-int getch(uint8_t uart_num) {
+int uart_getch(uint8_t uart_num) {
   int r;
   char buf[1];
 
-  r = getnstr(uart_num, buf, 1);
+  r = uart_getnstr(uart_num, buf, 1);
 
   return (r == TOCK_SUCCESS) ? buf[0] : TOCK_FAIL;
 }
 
-int getnstr_abort(uint8_t uart_num) {
+int uart_getnstr_abort(uint8_t uart_num) {
   return command(DRIVER_NUM_CONSOLE | (uart_num>>16), 3, 0, 0);
 }
